@@ -1,7 +1,7 @@
 mod models;
 mod schema;
 
-use self::models::{NewCompleteProduct, NewProduct, NewVariant, NewVariantValue, Variant};
+use self::models::{NewCompleteProduct, NewProduct, NewVariant, NewVariantValue, Product, Variant};
 use anyhow::Result;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
@@ -60,6 +60,18 @@ pub fn create_product(new_product: NewCompleteProduct, conn: &mut PgConnection) 
     })
 }
 
+pub fn list_products(
+    conn: &mut PgConnection,
+) -> Result<Vec<(Product, Vec<(Option<String>, String)>)>> {
+    use self::schema::products::dsl::products;
+    let all_products = products.load::<Product>(conn)?;
+    let mut res = Vec::new();
+    for product in all_products {
+        let product_vars = products_variants.filter(product_id.eq(&product.id));
+    }
+    Ok(all_products)
+}
+
 fn main() {
     println!("Hello, world!");
     establish_connection();
@@ -70,7 +82,7 @@ fn main() {
 fn create_product_test() {
     let conn = &mut establish_connection();
     conn.test_transaction::<_, Error, _>(|conn| {
-        let _res = create_product(
+        create_product(
             NewCompleteProduct {
                 product: NewProduct {
                     name: "boots".to_string(),
@@ -79,12 +91,30 @@ fn create_product_test() {
                 },
                 variants: vec![NewVariantValue {
                     variant: NewVariant {
-                        name: "shoes".to_string(),
+                        name: "size".to_string(),
                     },
-                    values: vec![Some("shoes_variants".to_string())],
+                    values: vec![Some(12.to_string()), Some(18.to_string())],
                 }],
             },
             conn,
+        )
+        .unwrap();
+
+        assert_eq!(
+            serde_json::to_string(&list_products(conn).unwrap()).unwrap(),
+            serde_json::to_string(&vec![(
+                Product {
+                    id: 1,
+                    name: "boots".to_string(),
+                    cost: 12.22,
+                    active: true,
+                },
+                vec![
+                    (Some(12.to_string()), "size".to_string()),
+                    (Some(18.to_string()), "size".to_string())
+                ]
+            )])
+            .unwrap()
         );
 
         Ok(())
